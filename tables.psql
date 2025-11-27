@@ -1,0 +1,68 @@
+CREATE TABLE users (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  role varchar(20),
+  name text,
+  contact jsonb
+);
+
+CREATE TABLE requests (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id uuid REFERENCES users(id),
+  created_ts timestamptz DEFAULT now(),
+  text text NOT NULL,
+  session_meta jsonb,
+  source varchar(64)
+);
+
+CREATE TABLE models (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name text,
+  version text,
+  params jsonb
+);
+
+CREATE TABLE responses (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  request_id uuid REFERENCES requests(id),
+  model_id uuid REFERENCES models(id),
+  text text NOT NULL,
+  created_ts timestamptz DEFAULT now(),
+  checksum varchar(64),
+  telemetry_meta jsonb
+);
+
+CREATE TABLE claims (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  response_id uuid REFERENCES responses(id),
+  position int,
+  text text NOT NULL,
+  type varchar(32),
+  raw_score double precision,
+  calibrated_score double precision,
+  check_worthiness double precision
+);
+
+CREATE TABLE proofs (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  claim_id uuid REFERENCES claims(id),
+  source_url text,
+  snippet text,
+  score double precision,
+  retrieved_ts timestamptz DEFAULT now()
+);
+
+CREATE TABLE tickets (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  claim_id uuid REFERENCES claims(id),
+  created_ts timestamptz DEFAULT now(),
+  status varchar(20) DEFAULT 'open',
+  moderator_id uuid REFERENCES users(id),
+  resolution text
+);
+
+CREATE TABLE metrics (
+  id bigserial PRIMARY KEY,
+  event_ts timestamptz DEFAULT now(),
+  metric_name text,
+  payload jsonb
+);
