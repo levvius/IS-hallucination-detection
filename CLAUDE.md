@@ -52,6 +52,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Testing
+
+**API Testing:**
 ```bash
 # Health check
 curl http://localhost:8000/api/v1/health
@@ -61,6 +63,9 @@ curl -X POST http://localhost:8000/api/v1/classify \
   -H "Content-Type: application/json" \
   -d '{"text": "Albert Einstein was born in 1879."}'
 ```
+
+**Unit & Integration Tests:**
+See [Testing Infrastructure](#testing-infrastructure) section below for running unit and integration tests.
 
 ## Important Details
 
@@ -89,6 +94,89 @@ app/
 └── utils/
     └── wikipedia_kb.py  # Wikipedia scraping utilities
 ```
+
+## Testing Infrastructure
+
+### Test Organization
+
+```
+tests/
+├── conftest.py              # Shared fixtures and test configuration
+├── unit/                    # 90 unit tests with mocks (~5s)
+│   ├── test_config.py       # Configuration validation (7 tests)
+│   ├── test_models.py       # ModelManager singleton (12 tests)
+│   ├── test_claim_extractor.py   # Claim extraction (16 tests)
+│   ├── test_evidence_retriever.py  # FAISS retrieval (16 tests)
+│   ├── test_nli_verifier.py      # NLI scoring (18 tests)
+│   └── test_classifier.py        # Classification logic (21 tests)
+└── integration/             # 16 integration tests with real models (~60s)
+    ├── test_classification_pipeline.py  # End-to-end classification (4 tests)
+    └── test_api_endpoints.py           # API routes testing (12 tests)
+```
+
+### Pytest Markers
+
+- `@pytest.mark.unit` - Fast unit tests with mocks
+- `@pytest.mark.integration` - Integration tests with real models
+- `@pytest.mark.slow` - Slow tests (>10s), typically with model loading
+
+### Key Fixtures (tests/conftest.py)
+
+- `mock_model_manager` - Mocked ModelManager for fast unit tests
+- `real_model_manager` - Real ModelManager with loaded models (module scope)
+- `test_client` - FastAPI TestClient for API testing
+- `mock_embed_model`, `mock_nli_pipeline`, `mock_faiss_index`, `mock_kb_snippets` - Individual mocks
+
+### Running Tests
+
+```bash
+# Unit tests only
+pytest tests/unit -m unit
+
+# Integration tests only (requires KB)
+pytest tests/integration -m integration
+
+# With coverage
+pytest tests/unit --cov=app --cov-report=html
+```
+
+## Security Features
+
+### Exception Handling
+
+8 custom exceptions in `app/core/exceptions.py`:
+- `AppBaseException` - Base exception with HTTP status codes
+- `ModelNotLoadedException` - Models not loaded (503)
+- `KnowledgeBaseException` - KB not found (503)
+- `ClaimExtractionException` - Claim extraction failed (500)
+- `EvidenceRetrievalException` - Evidence retrieval failed (500)
+- `NLIVerificationException` - NLI verification failed (500)
+- `ClassificationException` - Classification failed (500)
+- `CacheException` - Cache operation failed (500)
+
+### Rate Limiting
+
+- Library: `slowapi` (token bucket algorithm)
+- Default: 10 requests/minute per IP
+- Burst: 3 additional requests
+- Endpoint: All `/api/v1/*` routes
+- Configuration: `app/core/config.py` (RATE_LIMIT_REQUESTS, RATE_LIMIT_BURST)
+
+### Input Validation
+
+XSS protection in `app/api/schemas.py`:
+- 10 dangerous patterns detected: `<script>`, `javascript:`, `onerror=`, etc.
+- Minimum text length: 3 words
+- ValidationError (422) on XSS attempt
+
+### Caching
+
+- Library: `cachetools.TTLCache`
+- TTL: 5 minutes
+- Max size: 100 entries
+- Key: MD5 hash of input text
+- Location: `app/core/cache.py`
+- Endpoint: `/cache-info` for cache statistics
 
 ## Historical Context
 
