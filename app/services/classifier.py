@@ -4,6 +4,7 @@ from app.services.claim_extractor import extract_claims
 from app.services.evidence_retriever import retrieve_proofs
 from app.services.nli_verifier import nli_score
 from app.core.config import settings
+from app.core.exceptions import ClassificationException
 
 
 def assess_claim(claim: str, top_k: int = None) -> Dict:
@@ -60,67 +61,77 @@ def classify_text(text: str) -> Dict:
             - overall_classification: str ("правда", "неправда", "нейтрально")
             - confidence: float
             - claims: List[Dict] with claim analysis
+
+    Raises:
+        ClassificationException: If classification fails
     """
-    # Extract claims
-    claims = extract_claims(text)
+    try:
+        # Extract claims
+        claims = extract_claims(text)
 
-    # Assess each claim
-    claim_results = []
-    for claim_text in claims:
-        result = assess_claim(claim_text)
+        # Assess each claim
+        claim_results = []
+        for claim_text in claims:
+            result = assess_claim(claim_text)
 
-        # Map support score to classification
-        support = result["support"]
-        if support >= settings.truth_threshold:
-            classification = "правда"
-            confidence = support
-        elif support < settings.falsehood_threshold:
-            classification = "неправда"
-            confidence = 1.0 - support
+            # Map support score to classification
+            support = result["support"]
+            if support >= settings.truth_threshold:
+                classification = "правда"
+                confidence = support
+            elif support < settings.falsehood_threshold:
+                classification = "неправда"
+                confidence = 1.0 - support
+            else:
+                classification = "нейтрально"
+                confidence = support
+
+            claim_results.append({
+                "claim": claim_text,
+                "classification": classification,
+                "confidence": confidence,
+                "best_evidence": {
+                    "snippet": result["best_proof"]["snippet"],
+                    "source": result["best_proof"]["source"],
+                    "nli_score": result["best_proof"]["nli_score"],
+                    "retrieval_score": result["best_proof"]["retrieval_score"]
+                } if result["best_proof"] else None
+            })
+
+        # Overall classification aggregation
+        # Priority: if any "неправда" -> overall "неправда"
+        #           elif any "нейтрально" -> overall "нейтрально"
+        #           else -> overall "правда"
+        classifications = [r["classification"] for r in claim_results]
+        confidences = [r["confidence"] for r in claim_results]
+
+        if "неправда" in classifications:
+            overall = "неправда"
+            # Average confidence of falsehood claims
+            falsehood_confidences = [
+                c for c, cl in zip(confidences, classifications) if cl == "неправда"
+            ]
+            overall_confidence = sum(falsehood_confidences) / len(falsehood_confidences)
+        elif "нейтрально" in classifications:
+            overall = "нейтрально"
+            # Average confidence of neutral claims
+            neutral_confidences = [
+                c for c, cl in zip(confidences, classifications) if cl == "нейтрально"
+            ]
+            overall_confidence = sum(neutral_confidences) / len(neutral_confidences)
         else:
-            classification = "нейтрально"
-            confidence = support
+            overall = "правда"
+            # Average confidence of truth claims
+            overall_confidence = sum(confidences) / len(confidences) if confidences else 0.0
 
-        claim_results.append({
-            "claim": claim_text,
-            "classification": classification,
-            "confidence": confidence,
-            "best_evidence": {
-                "snippet": result["best_proof"]["snippet"],
-                "source": result["best_proof"]["source"],
-                "nli_score": result["best_proof"]["nli_score"],
-                "retrieval_score": result["best_proof"]["retrieval_score"]
-            } if result["best_proof"] else None
-        })
+        return {
+            "overall_classification": overall,
+            "confidence": overall_confidence,
+            "claims": claim_results
+        }
 
-    # Overall classification aggregation
-    # Priority: if any "неправда" -> overall "неправда"
-    #           elif any "нейтрально" -> overall "нейтрально"
-    #           else -> overall "правда"
-    classifications = [r["classification"] for r in claim_results]
-    confidences = [r["confidence"] for r in claim_results]
-
-    if "неправда" in classifications:
-        overall = "неправда"
-        # Average confidence of falsehood claims
-        falsehood_confidences = [
-            c for c, cl in zip(confidences, classifications) if cl == "неправда"
-        ]
-        overall_confidence = sum(falsehood_confidences) / len(falsehood_confidences)
-    elif "нейтрально" in classifications:
-        overall = "нейтрально"
-        # Average confidence of neutral claims
-        neutral_confidences = [
-            c for c, cl in zip(confidences, classifications) if cl == "нейтрально"
-        ]
-        overall_confidence = sum(neutral_confidences) / len(neutral_confidences)
-    else:
-        overall = "правда"
-        # Average confidence of truth claims
-        overall_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-
-    return {
-        "overall_classification": overall,
-        "confidence": overall_confidence,
-        "claims": claim_results
-    }
+    except Exception as e:
+        raise ClassificationException(
+            f"Classification failed: {str(e)}",
+            details={"text_length": len(text), "error": str(e)}
+        )

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 import logging
 
 from app.api.schemas import (
@@ -8,31 +10,55 @@ from app.api.schemas import (
 )
 from app.services.classifier import classify_text
 from app.core.models import ModelManager
+from app.core.cache import get_cached_result, cache_result, get_cache_info
+from app.core.exceptions import ClassificationException
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Initialize limiter
+limiter = Limiter(key_func=get_remote_address)
+
 
 @router.post("/classify", response_model=ClassifyResponse)
-async def classify_endpoint(request: ClassifyRequest):
+@limiter.limit("10/minute")
+async def classify_endpoint(request: Request, classify_req: ClassifyRequest):
     """
-    Classify text as "правда" (truth), "неправда" (falsehood), or "нейтрально" (neutral).
+    Classify English text as truth, falsehood, or neutral.
+
+    Rate limit: 10 requests per minute per IP.
+    Cached results expire after 5 minutes.
 
     Args:
-        request: ClassifyRequest with text field
+        request: FastAPI Request object (for rate limiting)
+        classify_req: ClassifyRequest with text field
 
     Returns:
         ClassifyResponse with overall classification, confidence, and claim analysis
     """
     try:
-        logger.info(f"Classifying text (length: {len(request.text)})")
-        result = classify_text(request.text)
-        logger.info(f"Classification result: {result['overall_classification']}")
+        # Check cache
+        cached = get_cached_result(classify_req.text)
+        if cached:
+            logger.info("Cache hit - returning cached result")
+            return cached
+
+        # Classify text
+        logger.info(f"Classifying text ({len(classify_req.text)} chars)")
+        result = classify_text(classify_req.text)
+
+        # Cache result
+        cache_result(classify_req.text, result)
+
         return result
+
     except Exception as e:
-        logger.error(f"Classification error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
+        logger.error(f"Classification failed: {str(e)}", exc_info=True)
+        raise ClassificationException(
+            f"Failed to classify text: {str(e)}",
+            details={"error_type": type(e).__name__}
+        )
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -40,19 +66,34 @@ async def health_check():
     """
     Health check endpoint.
 
+    Returns service status and model loading state.
+
     Returns:
         HealthResponse with status, models_loaded flag, and KB size
     """
-    try:
-        mm = ModelManager.get_instance()
-        models_loaded = mm._embed_model is not None
-        kb_size = len(mm._kb_snippets) if mm._kb_snippets else 0
+    mm = ModelManager.get_instance()
 
-        return {
-            "status": "healthy" if models_loaded else "not_ready",
-            "models_loaded": models_loaded,
-            "kb_size": kb_size
-        }
-    except Exception as e:
-        logger.error(f"Health check error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    try:
+        # Check if models are loaded
+        _ = mm.get_embed_model()
+        _ = mm.get_nli()
+        _ = mm.get_index()
+        snippets = mm.get_snippets()
+
+        return HealthResponse(
+            status="healthy",
+            models_loaded=True,
+            kb_size=len(snippets)
+        )
+    except Exception:
+        return HealthResponse(
+            status="not_ready",
+            models_loaded=False,
+            kb_size=0
+        )
+
+
+@router.get("/cache-info")
+async def cache_info_endpoint():
+    """Get cache statistics (for debugging)."""
+    return get_cache_info()

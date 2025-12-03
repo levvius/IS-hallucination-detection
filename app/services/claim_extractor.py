@@ -2,6 +2,7 @@ import re
 from typing import List
 
 from app.core.config import settings
+from app.core.exceptions import ClaimExtractionException
 
 
 # Regex for sentence splitting
@@ -19,39 +20,49 @@ def extract_claims(text: str, max_claims: int = None, min_len: int = 30) -> List
 
     Returns:
         List of extracted claim strings
+
+    Raises:
+        ClaimExtractionException: If claim extraction fails
     """
-    if max_claims is None:
-        max_claims = settings.max_claims
+    try:
+        if max_claims is None:
+            max_claims = settings.max_claims
 
-    # Split into sentences
-    sents = SENTENCE_SPLITTER_RE.split(text)
-    candidates = []
+        # Split into sentences
+        sents = SENTENCE_SPLITTER_RE.split(text)
+        candidates = []
 
-    for s in sents:
-        s = s.strip()
-        if len(s) < min_len:
-            continue
+        for s in sents:
+            s = s.strip()
+            if len(s) < min_len:
+                continue
 
-        # Heuristic filter: contains factual indicators
-        # - Verbs like is/was/won/died/born/founded (factual statements)
-        # - Contains digits (dates, numbers, statistics)
-        has_factual_verb = bool(re.search(
-            r'\b(is|was|are|were|won|died|born|founded|established|announced|reported|has|have|had)\b',
-            s,
-            re.IGNORECASE
-        ))
-        has_digit = bool(re.search(r'\d', s))
+            # Heuristic filter: contains factual indicators
+            # - Verbs like is/was/won/died/born/founded (factual statements)
+            # - Contains digits (dates, numbers, statistics)
+            has_factual_verb = bool(re.search(
+                r'\b(is|was|are|were|won|died|born|founded|established|announced|reported|has|have|had)\b',
+                s,
+                re.IGNORECASE
+            ))
+            has_digit = bool(re.search(r'\d', s))
 
-        if has_factual_verb or has_digit:
-            candidates.append(s)
+            if has_factual_verb or has_digit:
+                candidates.append(s)
 
-    # Fallback: if no candidates found, take longest sentences
-    if not candidates:
-        candidates = sorted(
-            [s for s in sents if len(s) >= min_len],
-            key=len,
-            reverse=True
-        )[:max_claims]
+        # Fallback: if no candidates found, take longest sentences
+        if not candidates:
+            candidates = sorted(
+                [s for s in sents if len(s) >= min_len],
+                key=len,
+                reverse=True
+            )[:max_claims]
 
-    # Return up to max_claims
-    return candidates[:max_claims]
+        # Return up to max_claims
+        return candidates[:max_claims]
+
+    except Exception as e:
+        raise ClaimExtractionException(
+            f"Failed to extract claims: {str(e)}",
+            details={"text_length": len(text), "error": str(e)}
+        )
