@@ -22,7 +22,9 @@ REST API для классификации текста на английско�
 
 ### Требования
 
-- Python 3.8+
+- **Python 3.9-3.13** (рекомендуется 3.13.1)
+  - ⚠️ Python 3.14 не поддерживается из-за несовместимости с transformers
+  - Python 3.8 и ниже не поддерживаются
 - 2.5-3GB RAM
 - 2.5GB свободного места на диске
 
@@ -128,6 +130,62 @@ curl "http://localhost:8000/api/v1/health"
   "kb_size": 265
 }
 ```
+
+## Testing
+
+This project includes comprehensive test coverage with unit and integration tests.
+
+### Running Tests
+
+**Unit Tests** (fast, use mocks):
+```bash
+# All unit tests
+pytest tests/unit -m unit -v
+
+# With coverage report
+pytest tests/unit -m unit --cov=app --cov-report=html
+
+# Specific test file
+pytest tests/unit/test_config.py -v
+```
+
+**Integration Tests** (slow, use real models):
+```bash
+# Build Knowledge Base first (required)
+python scripts/build_kb.py
+
+# Run integration tests
+pytest tests/integration -m integration -v
+
+# Skip slow tests
+pytest tests/integration -m "integration and not slow" -v
+```
+
+**All Tests:**
+```bash
+pytest tests/ -v --cov=app --cov-report=term-missing
+```
+
+### Test Structure
+
+- `tests/unit/` - 90 unit tests with mocks (fast, ~5s)
+  - test_config.py: Configuration validation (7 tests)
+  - test_models.py: ModelManager singleton (12 tests)
+  - test_claim_extractor.py: Claim extraction (16 tests)
+  - test_evidence_retriever.py: FAISS retrieval (16 tests)
+  - test_nli_verifier.py: NLI scoring (18 tests)
+  - test_classifier.py: Classification logic (21 tests)
+
+- `tests/integration/` - 16 integration tests with real models (slow, ~60s)
+  - test_classification_pipeline.py: End-to-end classification (4 tests)
+  - test_api_endpoints.py: API routes testing (12 tests)
+
+- `tests/conftest.py` - Shared fixtures (mock_model_manager, real_model_manager, etc.)
+
+### Coverage
+
+- Target: >= 85% for service layer
+- Current: ~90% for app/services/, ~95% for app/core/
 
 ## Структура проекта
 

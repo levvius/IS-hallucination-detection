@@ -1,8 +1,18 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import logging
 
 from app.api.routes import router
 from app.core.models import ModelManager
+from app.core.exceptions import (
+    AppBaseException,
+    ModelNotLoadedException,
+    InputValidationException,
+    KnowledgeBaseException
+)
 
 # Configure logging
 logging.basicConfig(
@@ -17,6 +27,52 @@ app = FastAPI(
     description="Classifies English text as truth, falsehood, or neutral using NLI and Wikipedia evidence",
     version="1.0.0"
 )
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# Exception handlers
+@app.exception_handler(ModelNotLoadedException)
+async def model_not_loaded_handler(request: Request, exc: ModelNotLoadedException):
+    """Handle model not loaded errors (503)."""
+    logger.error(f"Model not loaded: {exc.message}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.to_dict()
+    )
+
+
+@app.exception_handler(KnowledgeBaseException)
+async def knowledge_base_handler(request: Request, exc: KnowledgeBaseException):
+    """Handle knowledge base errors (503)."""
+    logger.error(f"Knowledge base error: {exc.message}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.to_dict()
+    )
+
+
+@app.exception_handler(InputValidationException)
+async def input_validation_handler(request: Request, exc: InputValidationException):
+    """Handle input validation errors (400)."""
+    logger.warning(f"Input validation failed: {exc.message}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.to_dict()
+    )
+
+
+@app.exception_handler(AppBaseException)
+async def app_base_exception_handler(request: Request, exc: AppBaseException):
+    """Handle all other application exceptions (500)."""
+    logger.error(f"Application error: {exc.message}", exc_info=True)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.to_dict()
+    )
 
 
 @app.on_event("startup")

@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # Wikipedia KB
     max_sentences_per_page: int = 15
 
+    # Rate Limiting
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 10  # requests per minute
+    rate_limit_burst: int = 3
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
