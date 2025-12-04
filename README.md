@@ -24,7 +24,7 @@ python scripts/build_kb.py
 
 ## ✨ Features
 
-### Web Interface (NEW!)
+### Web Interface
 - 🎨 Modern, responsive web UI
 - 📚 Browse 18 Wikipedia topics across 4 categories
 - 🔍 Real-time fact classification
@@ -39,27 +39,6 @@ python scripts/build_kb.py
 - 🚦 Rate limiting (10 req/min)
 - 💾 Response caching (5-minute TTL)
 - 🔒 XSS validation and input sanitization
-
----
-
-## 🆕 Recent Updates (December 2024)
-
-### Stability Improvements
-- ✅ Fixed segmentation faults on macOS Apple Silicon
-- ✅ Removed unsafe signal handlers causing infinite recursion
-- ✅ Implemented single-threaded PyTorch mode for stability
-- ✅ Fixed MPS GPU auto-detection issues
-- ✅ Removed uvicorn --reload mode conflicts
-- ✅ Added ThreadPoolExecutor for non-blocking ML operations
-- ✅ Added 45-second timeout protection
-
-### Bug Fixes
-- Fixed NLI pipeline crashes with roberta-large-mnli (355M parameters)
-- Fixed progress bar multiprocessing deadlocks
-- Fixed event loop blocking in FastAPI
-- Fixed response validation schema errors
-
-**Impact**: System is now stable and crash-free on macOS. All classification operations complete successfully without segmentation faults or hangs.
 
 ---
 
@@ -169,22 +148,15 @@ Response:
 }
 ```
 
-#### Get Available Topics
-```bash
-curl http://localhost:8000/api/v1/topics
-```
-
 ---
 
-## 📝 Example Test Inputs
-
-Test the system with these example texts from different Wikipedia categories:
+## 📝 Examples
 
 ### Example 1: People (Albert Einstein)
 ```bash
 curl -X POST http://localhost:8000/api/v1/classify \
   -H "Content-Type: application/json" \
-  -d '{"text": "Albert Einstein was born on March 14, 1879, in Ulm, Germany. He developed the theory of relativity in 1905 and won the Nobel Prize in Physics in 1921. Einstein emigrated to the United States in 1933 and became a professor at Princeton University."}'
+  -d '{"text": "Albert Einstein was born on March 14, 1879, in Ulm, Germany. He developed the theory of relativity in 1905 and won the Nobel Prize in Physics in 1921."}'
 ```
 
 **Expected Result:** ✅ правда (confidence: ~0.95+)
@@ -193,21 +165,10 @@ curl -X POST http://localhost:8000/api/v1/classify \
 ```bash
 curl -X POST http://localhost:8000/api/v1/classify \
   -H "Content-Type: application/json" \
-  -d '{"text": "Python is a high-level programming language created by Guido van Rossum in 1991. It has become one of the most popular languages for artificial intelligence and machine learning development. Neural networks are a key component of modern AI systems, inspired by biological neural networks in the human brain."}'
+  -d '{"text": "Python is a high-level programming language created by Guido van Rossum in 1991. It has become one of the most popular languages for artificial intelligence and machine learning development."}'
 ```
 
 **Expected Result:** ✅ правда (confidence: ~0.90+)
-
-### Example 3: Science (Climate Change & COVID-19)
-```bash
-curl -X POST http://localhost:8000/api/v1/classify \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Climate change refers to long-term shifts in global temperatures and weather patterns. The COVID-19 pandemic began in late 2019 and was caused by the SARS-CoV-2 virus. Both phenomena have had significant global impacts requiring scientific research and public health responses."}'
-```
-
-**Expected Result:** ✅ правда (confidence: ~0.85+)
-
-**Note**: These examples use factual information from the Wikipedia knowledge base. Classification confidence may vary slightly based on model initialization, but all should classify as "правда" with high confidence.
 
 ---
 
@@ -255,13 +216,7 @@ source venv/bin/activate
 python scripts/build_kb.py  # Rebuild KB (2-5 minutes)
 ```
 
-### 5. Rate Limit Exceeded (429 Error)
-
-**Причина**: Превышен лимит 10 запросов в минуту
-
-**Решение**: Подождите 60 секунд или перезапустите сервер
-
-### 6. Port 8000 Already in Use
+### 5. Port 8000 Already in Use
 
 **Причина**: Другой процесс использует порт 8000
 
@@ -276,28 +231,6 @@ kill $(lsof -t -i:8000)
 
 ---
 
-## 🧪 Testing
-
-### Unit Tests (90 tests, ~5 seconds)
-```bash
-source venv/bin/activate
-pytest tests/unit -m unit
-```
-
-### Integration Tests (16 tests, ~60 seconds)
-```bash
-source venv/bin/activate
-pytest tests/integration -m integration
-```
-
-### All Tests with Coverage
-```bash
-source venv/bin/activate
-pytest tests/ --cov=app --cov-report=html
-```
-
----
-
 ## 📁 Project Structure
 
 ```
@@ -305,7 +238,7 @@ IS-hallucination-detection/
 ├── app/
 │   ├── main.py                    # FastAPI application
 │   ├── api/
-│   │   ├── routes.py              # API endpoints (/classify, /health, /topics)
+│   │   ├── routes.py              # API endpoints
 │   │   └── schemas.py             # Pydantic models
 │   ├── core/
 │   │   ├── config.py              # Configuration
@@ -319,48 +252,25 @@ IS-hallucination-detection/
 │   │   └── classifier.py         # Main classification logic
 │   ├── utils/
 │   │   └── wikipedia_kb.py       # KB building utilities
-│   └── static/                    # Frontend files (NEW!)
-│       ├── index.html             # Main UI
-│       ├── css/styles.css         # Responsive design
+│   └── static/                    # Frontend files
+│       ├── index.html
+│       ├── css/styles.css
 │       └── js/
-│           ├── api.js             # API client
-│           ├── ui.js              # UI controller
-│           └── app.js             # Main logic
+│           ├── api.js
+│           ├── ui.js
+│           └── app.js
 ├── scripts/
 │   └── build_kb.py                # Build Knowledge Base
 ├── tests/
-│   ├── unit/                      # 90 unit tests
-│   └── integration/               # 16 integration tests
+│   ├── unit/                      # 71+ unit tests
+│   └── integration/               # 16+ integration tests
 ├── data/
 │   ├── faiss_index/               # FAISS vector index
 │   └── kb_snippets.json           # KB metadata
-├── requirements.txt               # Python dependencies
-├── run.sh                         # Startup script
-└── README.md                      # This file
+├── requirements.txt
+├── run.sh
+└── README.md
 ```
-
----
-
-## ⚙️ Configuration
-
-Configuration is managed via `app/core/config.py`:
-
-### Model Configuration
-- `EMBED_MODEL`: `all-MiniLM-L6-v2` (sentence embeddings)
-- `NLI_MODEL`: `roberta-large-mnli` (NLI scoring)
-
-### Classification Thresholds
-- `TRUTH_THRESHOLD`: 0.85 (>= 85% confidence = правда)
-- `FALSEHOOD_THRESHOLD`: 0.4 (< 40% confidence = неправда)
-
-### Retrieval Settings
-- `TOP_K_PROOFS`: 6 (retrieve top 6 evidence snippets)
-- `MAX_CLAIMS`: 8 (max claims to extract)
-
-### API Settings
-- `RATE_LIMIT_REQUESTS`: 10 (requests per minute)
-- `CACHE_TTL`: 300 seconds (5 minutes)
-- `CACHE_MAX_SIZE`: 100 entries
 
 ---
 
@@ -377,7 +287,7 @@ User Input (English text)
     ↓
 2. Evidence Retrieval
    - FAISS vector search
-   - Find top 6 relevant Wikipedia snippets
+   - Find top 10 relevant Wikipedia snippets
     ↓
 3. NLI Verification
    - RoBERTa-large-mnli model
@@ -385,40 +295,23 @@ User Input (English text)
     ↓
 4. Classification
    - Aggregate NLI scores
-   - Apply thresholds (0.85/0.4)
+   - Apply thresholds (0.75/0.4)
    - Return verdict: правда/неправда/нейтрально
 ```
 
 ### Classification Logic
 
 **Per-claim scoring:**
-- `support >= 0.85` → "правда" (high confidence)
-- `0.4 <= support < 0.85` → "нейтрально" (uncertain)
+- `support >= 0.75` → "правда" (high confidence)
+- `0.4 <= support < 0.75` → "нейтрально" (uncertain)
 - `support < 0.4` → "неправда" (contradicts evidence)
 
-**Overall aggregation** (pessimistic):
-- ANY claim "неправда" → overall "неправда"
-- Else, ANY claim "нейтрально" → overall "нейтрально"
-- Else → overall "правда"
+**Overall aggregation** (weighted):
+- High-confidence truths can override low-confidence falsehoods
+- Neutral claims get 50% weight
+- Overall = category with highest weighted vote
 
----
-
-## 🤝 Contributing
-
-This is a university project for "Технологии проектирования и сопровождения информационных систем".
-
-**Course**: Information Systems Design and Maintenance Technologies
-**University**: [Your University Name]
-**Year**: 2025
-
----
-
-## 📞 Support
-
-For issues, please check:
-1. [Troubleshooting](#troubleshooting) section above
-2. Server logs (`uvicorn` output in terminal)
-3. Browser console (F12) for frontend errors
+For details, see `CLAUDE.md`
 
 ---
 
@@ -428,34 +321,6 @@ For issues, please check:
 - **Health Check**: http://localhost:8000/api/v1/health
 - **Frontend**: http://localhost:8000
 - **Project Documentation**: See `CLAUDE.md` for detailed architecture
-
----
-
-## 📝 Version History
-
-### Version 2.1 (Current - December 2024)
-- ✅ **CRITICAL**: Fixed segmentation faults on macOS
-- ✅ Implemented single-threaded PyTorch mode for stability
-- ✅ Removed unsafe signal handlers
-- ✅ Fixed MPS GPU auto-detection crashes
-- ✅ Added ThreadPoolExecutor for non-blocking ML operations
-- ✅ Added 45-second timeout protection
-- ✅ Fixed NLI pipeline crashes
-- ✅ System now stable and crash-free
-
-### Version 2.0
-- ✅ Added web interface (HTML/CSS/JavaScript)
-- ✅ 18 Wikipedia topics with examples
-- ✅ Improved error handling with clear messages
-- ✅ Environment checks in build scripts
-- ✅ Better startup experience
-
-### Version 1.0
-- ✅ REST API with FastAPI
-- ✅ NLI-based fact verification
-- ✅ FAISS vector search
-- ✅ Wikipedia knowledge base
-- ✅ Comprehensive testing (106 tests)
 
 ---
 
